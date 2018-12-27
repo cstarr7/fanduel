@@ -2,7 +2,7 @@
 # @Author: Charles Starr
 # @Date:   2018-01-28 21:26:02
 # @Last Modified by:   charl
-# @Last Modified time: 2018-12-26 17:28:51
+# @Last Modified time: 2018-12-26 19:00:11
 
 import pandas as pd 
 import requests
@@ -27,6 +27,9 @@ class Player(object):
 			'Points', 'Rebounds', 'Assists', 'Blocks', 'Steals', 'Minutes', 'Turnovers'
 			]
 			)
+		self.number_fire = pd.Series(data = 0.0, index = [
+			'Fanduel Points', 'Value', 'Minutes', 'Points', 'Rebounds', 'Assists',
+			'Steals', 'Blocks', 'Turnovers'])
 
 	def pull_stats(self, year):
 
@@ -79,9 +82,28 @@ class Player(object):
 
 		return
 
+	def pull_numberfire(self):
+
+		url = 'https://www.numberfire.com/nba/daily-fantasy/daily-basketball-projections'
+
+		fire_tree = game_log_tree = html.fromstring(requests.get(url).text)
+		fire_table = game_log_tree.xpath('.//tbody[@class="stat-table__body"]')[0]
+
+		fire_rows = fire_table.xpath('./tr/td/span/a')
+		for row in fire_rows:
+			if self.nickname == row.xpath("./text()")[0].strip():
+				true_row = row.xpath('./../..')[0]
+				stats = true_row.xpath('./following-sibling::*/text()')
+				self.number_fire = [x.strip() for x in stats]
+				print self.number_fire
+
+
+
+
 test_p = Player('Myles Turner', 'PF', '$7300', 'ATL', '/players/t/turnemy01.html')
 test_p.pull_stats(2019)
 test_p.calculate_rates()
+test_p.pull_numberfire()
 print test_p.stats
 print test_p.stat_rates
 
