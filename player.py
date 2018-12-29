@@ -2,15 +2,16 @@
 # @Author: Charles Starr
 # @Date:   2018-01-28 21:26:02
 # @Last Modified by:   charl
-# @Last Modified time: 2018-12-26 19:00:11
+# @Last Modified time: 2018-12-29 18:29:05
 
 import pandas as pd 
 import requests
 from lxml import html
+import process_csv
 
 class Player(object):
 
-	def __init__(self, nickname, position, price, opponent, bref_url):
+	def __init__(self, nickname, position, bref_url, price, opponent):
 
 		self.nickname = nickname
 		self.position = position
@@ -30,6 +31,8 @@ class Player(object):
 		self.number_fire = pd.Series(data = 0.0, index = [
 			'Fanduel Points', 'Value', 'Minutes', 'Points', 'Rebounds', 'Assists',
 			'Steals', 'Blocks', 'Turnovers'])
+
+		self.projected = 0.0
 
 	def pull_stats(self, year):
 
@@ -82,7 +85,28 @@ class Player(object):
 
 		return
 
-	def pull_numberfire(self):
+	def pull_numberfire(self, fire_rows):
+
+		for row in fire_rows:
+			if self.nickname == row.xpath("./text()")[0].strip():
+				true_row = row.xpath('./../..')[0]
+				stats = true_row.xpath('./following-sibling::*/text()')
+				self.number_fire = [x.strip() for x in stats]
+				self.projected = self.number_fire['Fanduel Points']
+				break
+
+
+class PlayerPool(object):
+	#assemble pool of players for the slate
+	
+	def __init__(self, fanduel_csv):
+
+		self.csv = FanduelCSV(fanduel_csv)
+		self.fire_rows = self.retrieve_numberfire()
+		self.all_players = self.csv.create_players()
+		self.valid_players = self.filter_players()
+
+	def retrieve_numberfire(self):
 
 		url = 'https://www.numberfire.com/nba/daily-fantasy/daily-basketball-projections'
 
@@ -90,12 +114,22 @@ class Player(object):
 		fire_table = game_log_tree.xpath('.//tbody[@class="stat-table__body"]')[0]
 
 		fire_rows = fire_table.xpath('./tr/td/span/a')
-		for row in fire_rows:
-			if self.nickname == row.xpath("./text()")[0].strip():
-				true_row = row.xpath('./../..')[0]
-				stats = true_row.xpath('./following-sibling::*/text()')
-				self.number_fire = [x.strip() for x in stats]
-				print self.number_fire
+
+		return fire_rows
+
+	def filter_players(self):
+
+		valid_players = []
+		for player in players:
+			player.pull_numberfire(self.fire_rows)
+			if player.projected > 0:
+				valid_players.append(player)
+		return valid_players
+
+
+		
+		
+			
 
 
 
