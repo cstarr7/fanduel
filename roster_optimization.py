@@ -2,7 +2,7 @@
 # @Author: charl
 # @Date:   2018-12-29 18:31:18
 # @Last Modified by:   charl
-# @Last Modified time: 2019-01-05 17:53:57
+# @Last Modified time: 2019-01-11 22:00:28
 import process_csv
 import player
 import genetic_algorithm
@@ -25,7 +25,7 @@ def leave_one_out():
 
 def projection_sources():
 
-	processed_csv = process_csv.FanduelCSV('fanduel.csv')
+	processed_csv = process_csv.FanduelCSV('fanduel.csv', 'player_db.sqlite')
 	player_pool = processed_csv.pool
 	ga = genetic_algorithm.FanduelNBA(
 		player_pool, 10000, 30, 0.25, 0.10, 0.05, 60000,'best_roster'
