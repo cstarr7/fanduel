@@ -2,51 +2,52 @@
 # @Author: charl
 # @Date:   2018-12-28 19:39:33
 # @Last Modified by:   charl
-# @Last Modified time: 2018-12-29 17:51:42
+# @Last Modified time: 2019-01-10 23:58:56
 import pandas as pd 
 import numpy as np
 import copy
+import player
 
 
 class GeneticSearch(object):
 
-    def __init__(
-    	self, player_pool, gen_size, gen_count, survival_rate, mutation_rate,
-    	inversion_rate, budget, chromosomes, positions
-    	):
+	def __init__(
+		self, player_pool, gen_size, gen_count, survival_rate, mutation_rate,
+		inversion_rate, budget, output_name, chromosomes, positions
+		):
 
-    	self.player_pool = player_pool
-    	self.gen_size = gen_size
-    	self.gen_count = gen_count
-    	self.survival_rate = survival_rate
-    	self.mutation_rate = mutation_rate
-    	self.inversion_rate = inversion_rate
-    	self.budget = budget
-    	self.chromosomes = chromosomes
-    	self.positions = positions
-    	self.position_pools = self.build_player_pools(positions)
-    	self.gene_pool = self.initialize_rosters()
-    	self.evolve_rosters()
+		self.player_pool = player_pool
+		self.gen_size = gen_size
+		self.gen_count = gen_count
+		self.survival_rate = survival_rate
+		self.mutation_rate = mutation_rate
+		self.inversion_rate = inversion_rate
+		self.budget = budget
+		self.chromosomes = chromosomes
+		self.positions = positions
+		self.output_name = output_name
+		self.position_pools = self.build_player_pools()
+		self.gene_pool = self.initialize_rosters()
+		self.top_lineup = self.evolve_rosters()
 
-    def build_player_pools(self):
+	def build_player_pools(self):
 
-    	position_pools = {}
-    	#create a dataframe for each position
-    	for position in positions:
-    		position_pools[position] = pd.DataFrame(
-    			0, columns = 'Nickname', 'Price', 'Projected'
-    			)
-    	#add players to appropriate dataframe
-    	for player in self.player_pool:
-    		position_pools[player.position].append(
-    			[player.nickname, player.price, player.projected]
-    			)
+		position_pools = {}
+		#create a dataframe for each position
+		for position in self.positions:
+			position_pools[position] = pd.DataFrame(
+				0, index = [], columns = ['Nickname', 'Price', 'Projected']
+				)
+		#add players to appropriate dataframe
+		for index, player in enumerate(self.player_pool.valid_players):
+			position_pools[player.position].loc[index] = (
+				[player.nickname, player.price, player.projected]
+				)
+		return position_pools
 
-    	return position_pools
+	def initialize_rosters(self):
 
-    def initialize_rosters(self):
-
-    	rosters = []
+		rosters = []
 		#create unique roster equal to generation count
 		while len(rosters) < self.gen_size:
 			roster = copy.deepcopy(self.chromosomes)
@@ -59,37 +60,35 @@ class GeneticSearch(object):
 	def generate_roster(self):
 		pass
 
-    def run_generation(self):
-    	#perform operations associated with a generation of roster evolution
+	def run_generation(self):
+		#perform operations associated with a generation of roster evolution
+		self.bottleneck()
+		self.repopulate()
+		self.rank_rosters()
 
-    	self.bottleneck()
-    	self.repopulate()
-    	self.rank_rosters()
+	def remove_invalids(self):
 
-    def remove_invalids(self):
+		#remove rosters if they exceed budget or have duplicate players
+		for roster in self.gene_pool:
+			valid = False
+			valid = self.validate_roster(roster)
+			while not valid:
+				roster = self.generate_roster()
+				valid = self.validate_roster(roster)
 
-    	#remove rosters if they exceed budget or have duplicate players
-    	for roster in self.gene_pool:
-    		valid = False
-    		valid = self.validate_roster(roster)
-    		while not valid:
-    			roster = self.generate_roster()
-    			valid = self.validate_roster(roster)
+	def validate_roster(self, roster):
+		pass
 
-    def validate_roster(self, roster):
-    	pass
+	def rank_rosters(self):
 
-    def rank_rosters(self):
-
-		rank_array = []
+		points_array = []
 
 		for roster in self.gene_pool:
 			fitness_points = self.point_tally(roster)
-			rank_array.append(fitness_points)
 
-		self.gene_pool = [
-			x for _, x in sorted(zip(rank_array, self.gene_pool), reverse = True)
-			]
+			points_array.append(fitness_points)
+		rank_array = np.argsort(points_array)[::-1]
+		self.gene_pool = [self.gene_pool[x] for x in rank_array]
 
 		return
 
@@ -98,7 +97,7 @@ class GeneticSearch(object):
 		fitness_points = 0.0
 		for players, position in zip(roster, self.positions):
 			for player in players:
-				fitness_points += self.position_pools[position].loc(player, 'Projected')
+				fitness_points += self.position_pools[position].loc[player, 'Projected']
 		return fitness_points
 
 	def salary_tally(self, roster):
@@ -106,7 +105,7 @@ class GeneticSearch(object):
 		salary = 0
 		for players, position in zip(roster, self.positions):
 			for player in players:
-				salary += self.position_pools[position].loc(player, 'Price')
+				salary += self.position_pools[position].loc[player, 'Price']
 		return salary
 
 	def bottleneck(self):
@@ -119,8 +118,10 @@ class GeneticSearch(object):
 		#generate new lineup variations through mating, mutation, and inversion
 		while len(self.gene_pool) < self.gen_size:
 			offspring = []
-			mom, dad = np.random.choice(self.gene_pool, 2)
-			for mom_pos, dad_pos, position in zip(mom, dad self.positions):
+			mom, dad = np.random.randint(0, len(self.gene_pool), 2)
+			for mom_pos, dad_pos, position in zip(
+				self.gene_pool[mom], self.gene_pool[dad], self.positions
+				):
 				offspring_position = []
 				#mating
 				for players in zip(mom_pos, dad_pos):
@@ -143,45 +144,49 @@ class GeneticSearch(object):
 
 	def evolve_rosters(self):
 		#controls and reports on roster evolution
-		writer = pd.ExcelWriter('ga_generation_report.xlsx')
+		writer = pd.ExcelWriter(self.output_name + '.xlsx')
+		report = None
 		for i in range(self.gen_count):
 			self.run_generation()
 			report = self.generation_report()
 			report.to_excel(writer, sheet_name = 'Generation' + str(i))
+			print 'Generation' + str(i)
 		writer.save()
+		best_roster = report.iloc[1,:9]
+		print best_roster
+		return best_roster
 
 	def generation_report(self):
 		#pandas data frame for top 100 rosters per generation
-		report = pd.DataFrame(0, columns = 
+		report = pd.DataFrame(0, index = [], columns = 
 			['PG1', 'PG2', 'SG1', 'SG2', 'SF1', 'SF2', 'PF1', 'PF2', 'C', 'Points', 'Salary']
 			)
-		for roster in self.gene_pool[:100]:
+		for index, roster in enumerate(self.gene_pool[:100], 1):
 			payload = []
 			points = self.point_tally(roster)
 			salary = self.salary_tally(roster)
 			for players, position in zip(roster, self.positions):
 				for player in players:
 					payload.append(
-						self.position_pools[position].loc(player, 'Nickname')
+						self.position_pools[position].loc[player, 'Nickname']
 						)
 			payload.append(points)
 			payload.append(salary)
-			report.append(payload)
+			report.loc[index] = payload
 		return report
-
-
-
-
 
 
 class FanduelNBA(GeneticSearch):
 
-    def __init__(self):
-
-	    super(FanduelNBA, self).__init__(
-	        player_pool, gen_size, gen_count, survival_rate, mutation_rate,
-	    	inversion_rate, budget, [[], [], [], [], []], ['PG', 'SG', 'SF', 'PF', 'C']
-	        )
+	def __init__(
+		self, player_pool, gen_size, gen_count, survival_rate, mutation_rate,
+		inversion_rate, budget, output_name, chromosomes = [[], [], [], [], []], 
+		positions = ['PG', 'SG', 'SF', 'PF', 'C']
+		):
+		super(FanduelNBA, self).__init__(
+			player_pool, gen_size, gen_count, survival_rate, mutation_rate,
+			inversion_rate, budget, output_name, chromosomes, positions
+			)
 
 	def generate_roster(self):
 		#randomly sample index of position dataframe
@@ -189,32 +194,32 @@ class FanduelNBA(GeneticSearch):
 		for slot, position in enumerate(self.positions):
 			#center only has one slot, others have two
 			if position == 'C':
-				roster[slot].append(
-					np.random.choice(self.position_pools.index, 1)
+				roster[slot] = (
+					np.random.choice(self.position_pools[position].index, 1)
 					)
 			else:
-				roster[slot].append(
-					np.random.choice(self.position_pools.index, 2)
+				roster[slot] = (
+					np.random.choice(self.position_pools[position].index, 2)
 					)
 		return roster
 
-    def validate_roster(self, roster):
-    	#check whether there are duplicate players or roster exceeds budget
-    	valid == True
+	def validate_roster(self, roster):
+		#check whether there are duplicate players or roster exceeds budget
+		valid = True
 		payroll = 0
 		for players, position in zip(roster, self.positions):
 			if position != 'C':
-				seen = set()
+				seen = set([])
 				for player in players:
 					if player in seen:
 						valid = False
 						break
-					payroll += self.position_pools[position].loc(player, 'Price')
-					seen.append(player)
+					payroll += self.position_pools[position].loc[player, 'Price']
+					seen.update([player])
 				if valid == False:
 					break
 			else:
-				payroll += self.position_pools[position].loc(player, 'Price')
+				payroll += self.position_pools[position].loc[players[0], 'Price']
 		
 		if payroll > self.budget:
 			valid = False
