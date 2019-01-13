@@ -2,12 +2,11 @@
 # @Author: charl
 # @Date:   2018-12-28 19:39:33
 # @Last Modified by:   charl
-# @Last Modified time: 2019-01-10 23:58:56
-import pandas as pd 
-import numpy as np
-import copy
-import player
+# @Last Modified time: 2019-01-12 23:32:15
 
+import pandas as pd
+import copy
+import numpy as np
 
 class GeneticSearch(object):
 

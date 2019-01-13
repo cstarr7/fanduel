@@ -2,25 +2,23 @@
 # @Author: Charlie
 # @Date:   2017-12-28 20:54:09
 # @Last Modified by:   charl
-# @Last Modified time: 2019-01-11 22:17:27
+# @Last Modified time: 2019-01-12 23:37:12
 
+import pandas as pd
 from lxml import html
 import requests
 import sqlite3
-import pandas as pd
-import os
 import player
-import numpy as np
-
 
 class ProcessCSV(object):
 	#generic class and functions for processing both DraftKings and fanduel CSVs
 
-	def __init__(self, daily_player_CSV, db_file):
+	def __init__(self, daily_player_CSV, db_file, year):
 
 		self.daily_player_CSV = daily_player_CSV
 		self.player_table = self.open_CSV()
 		self.player_db_file = db_file
+		self.year = year
 
 	def open_CSV(self):
 
@@ -32,9 +30,9 @@ class ProcessCSV(object):
 class FanduelCSV(ProcessCSV):
 
 
-	def __init__(self, daily_player_CSV, db_file):
+	def __init__(self, daily_player_CSV, db_file, year):
 
-		super(FanduelCSV, self).__init__(daily_player_CSV, db_file)
+		super(FanduelCSV, self).__init__(daily_player_CSV, db_file, year)
 		self.fire_rows = self.retrieve_numberfire()
 		#self.grinder_table = self.retrieve_rotogrinders()
 		#self.baller_rows = self.retrieve_rotoballer()
@@ -80,7 +78,7 @@ class FanduelCSV(ProcessCSV):
 	def create_pool(self):
 
 		players = self.create_players()
-		pool = PlayerPool(players)
+		pool = player.PlayerPool(players)
 
 		return pool
 
@@ -93,11 +91,11 @@ class FanduelCSV(ProcessCSV):
 				'''SELECT fd_nickname, fd_position, bref_url, nf_name, grinder_name,
 				baller_name from players WHERE fd_nickname = ?''',
 				(baller['Nickname'],)).fetchall()[0])
-			payload.extend([baller['Salary'], baller['Opponent']])
+			payload.extend([baller['Salary'], baller['Opponent'], self.year])
 			new_player = player.Player(*payload)
 			new_player.pull_numberfire(self.fire_rows)
 			new_player.make_projection()
-			new_player.projected = new_player.charles_projection
+			new_player.projected = new_player.nf_projection
 			if baller['Injury Indicator'] != 'O':
 				players.append(new_player)
 		return players

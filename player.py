@@ -2,20 +2,18 @@
 # @Author: Charles Starr
 # @Date:   2018-01-28 21:26:02
 # @Last Modified by:   charl
-# @Last Modified time: 2019-01-11 21:37:09
+# @Last Modified time: 2019-01-12 23:41:55
 
-import pandas as pd 
-import requests
+import pandas as pd
 from lxml import html
-import process_csv
-import numpy as np
+import requests
 
 point_values = [1.0, 1.2, 1.5, 3.0, 3.0, -1.0]
 
 class Player(object):
 
 	def __init__(self, nickname, position, bref_url, nf_name, grinder_name, 
-		baller_name, price, opponent):
+		baller_name, price, opponent, year):
 
 		self.nickname = nickname
 		self.position = position
@@ -25,6 +23,7 @@ class Player(object):
 		self.grinder_name = grinder_name
 		self.baller_name = baller_name
 		self.bref_url = bref_url
+		self.year = year
 		self.stats = pd.Series(
 			data = [[] for i in range(0,8)], index = [
 			'Points', 'Rebounds', 'Assists', 'Blocks', 'Steals',
@@ -49,7 +48,7 @@ class Player(object):
 	def pull_stats(self, year):
 		url = (
 			'https://www.basketball-reference.com' + self.bref_url[:-5] 
-			+ '/gamelog/' + str(year)
+			+ '/gamelog/' + str(self.year)
 			)
 
 		game_log_tree = html.fromstring(requests.get(url).text)
@@ -160,6 +159,119 @@ class Player(object):
 		self.charles_projection = projected_total
 
 		return
+
+class PlayerPool(object):
+	#assemble pool of players for the slate
+	
+	def __init__(self, players):
+
+		self.valid_players = self.filter_players(players)
+
+	def filter_players(self, players):
+
+		valid_players = []
+		for baller in players:
+			if baller.projected > 0.0:
+				valid_players.append(baller)
+			else:
+				print baller.nickname
+		projection_out(valid_players)
+		return valid_players
+
+class Team(object):
+
+	def __init__(self, team_name, fd_abbr, bref_abbr, year):
+
+		self.team_name = team_name
+		self.fd_abbr = fd_abbr
+		self.bref_abbr = bref_abbr
+		self.year = year
+		self.stats_for = pd.DataFrame(0.0, index = [], columns = 
+			['Points', 'Rebounds', 'Assists', 'Steals', 'Blocks', 'Turnovers']
+			)
+		self.stats_against = pd.DataFrame(0.0, index = [], columns = 
+			['Points', 'Rebounds', 'Assists', 'Steals', 'Blocks', 'Turnovers']
+			)
+		self.rates_for = pd.Series(0.0, index = 
+			['Points', 'Rebounds', 'Assists', 'Steals', 'Blocks', 'Turnovers']
+			)
+		self.rates_against = pd.Series(0.0, index = 
+			['Points', 'Rebounds', 'Assists', 'Steals', 'Blocks', 'Turnovers']
+			)
+		self.retrieve_stats()
+		print self.stats_for
+		print self.stats_against
+
+	def retrieve_stats(self):
+
+		url = (
+			'https://www.basketball-reference.com/teams/' 
+			+ self.bref_abbr + '/' + str(self.year) + '/gamelog/'
+			)
+
+		game_log_tree = html.fromstring(requests.get(url).text)
+		game_log_table = game_log_tree.xpath('//table[@id="tgl_basic"]')[0]
+
+		for game_row in game_log_table.xpath(
+			'./tbody/tr[contains(@id, "tgl_basic")]'
+			):
+			
+			date_index = game_row.xpath('./td[@data-stat="date_game"]/a/text()') [0]
+			#populate for stats from bref table
+			self.stats_for.loc[date_index, 'Points'] = (
+				game_row.xpath('./td[@data-stat="pts"]/text()')
+				)[0]
+			self.stats_for.loc[date_index, 'Rebounds'] = (
+				game_row.xpath('./td[@data-stat="trb"]/text()')
+				)[0]
+			self.stats_for.loc[date_index, 'Assists'] = (
+				game_row.xpath('./td[@data-stat="ast"]/text()')
+				)[0]
+			self.stats_for.loc[date_index, 'Steals'] = (
+				game_row.xpath('./td[@data-stat="stl"]/text()')
+				)[0]
+			self.stats_for.loc[date_index, 'Blocks'] = (
+				game_row.xpath('./td[@data-stat="blk"]/text()')
+				)[0]
+			self.stats_for.loc[date_index, 'Turnovers'] = (
+				game_row.xpath('./td[@data-stat="tov"]/text()')
+				)[0]
+			#populate against stats from bref table
+			self.stats_against.loc[date_index, 'Points'] = (
+				game_row.xpath('./td[@data-stat="opp_pts"]/text()')
+				)[0]
+			self.stats_against.loc[date_index, 'Rebounds'] = (
+				game_row.xpath('./td[@data-stat="opp_trb"]/text()')
+				)[0]
+			self.stats_against.loc[date_index, 'Assists'] = (
+				game_row.xpath('./td[@data-stat="opp_ast"]/text()')
+				)[0]
+			self.stats_against.loc[date_index, 'Steals'] = (
+				game_row.xpath('./td[@data-stat="opp_stl"]/text()')
+				)[0]
+			self.stats_against.loc[date_index, 'Blocks'] = (
+				game_row.xpath('./td[@data-stat="opp_blk"]/text()')
+				)[0]
+			self.stats_against.loc[date_index, 'Turnovers'] = (
+				game_row.xpath('./td[@data-stat="opp_tov"]/text()')
+				)[0]
+
+		return
+
+def projection_out(valid_players):
+
+	outframe = pd.DataFrame(
+		0.0, index = [], columns = ['NF Projection', 'Charles Projection', 'Price'])
+	for player in valid_players:
+		outframe.loc[player.nickname] = (
+			[player.nf_projection, player.charles_projection, player.price]
+			)
+
+	writer = pd.ExcelWriter('projection_compare.xlsx')
+	outframe.to_excel(writer)
+	writer.save()
+
+
 
 
 
